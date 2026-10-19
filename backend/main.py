@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from auth.auth import authenticate_user, create_user, initialize_db, user_from_token
 from services.assistant import answer_question
+from services.gap_analyzer import analyze_product
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -35,6 +36,11 @@ app.add_middleware(
 
 class AskRequest(BaseModel):
     question: str
+    language: str = "English"
+
+
+class GapRequest(BaseModel):
+    description: str
     language: str = "English"
 
 
@@ -117,4 +123,28 @@ def ask(
         return JSONResponse(
             status_code=500,
             content={"error": "Assistant request failed."},
+        )
+
+
+@app.post("/gap")
+def gap(
+    request: GapRequest,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+):
+    user = _user_for_credentials(credentials) if credentials else None
+    try:
+        result = analyze_product(
+            request.description,
+            request.language,
+            user["user_type"] if user else None,
+        )
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Specification gap analysis failed."},
         )

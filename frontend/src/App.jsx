@@ -32,6 +32,7 @@ function LandingPage() {
         <div className="nav-links"><a href="#features">Features</a><a href="#how-it-works">How it works</a></div>
         <div className="nav-actions">
           {user ? <><span className="nav-user-name">{user.name}</span><button className="button button-quiet" onClick={logout}>Logout</button></> : <><Link className="button button-quiet" to="/login">Login</Link><Link className="button button-quiet" to="/register">Register</Link></>}
+          <Link className="button button-quiet gap-nav-link" to="/gap">Gap Analyzer</Link>
           <Link className="button button-primary nav-start" to="/chat">Start chatting <span aria-hidden="true">&gt;</span></Link>
         </div>
       </nav>
@@ -134,7 +135,7 @@ function ChatPage() {
       <button className="new-chat-button" onClick={startNewChat}><span>+</span>New chat</button>
       <div className="history-label">THIS SESSION</div>
       <nav className="question-history" aria-label="This session's past questions">{pastQuestions.map((message) => <button key={message.id} title={message.content} onClick={() => scrollToMessage(message.id)}><span>&gt;</span>{message.content}</button>)}{!pastQuestions.length && <p className="history-empty">Your questions will appear here.</p>}</nav>
-      <div className="sidebar-bottom"><label htmlFor="chat-language">Answer language</label><select id="chat-language" value={language} onChange={(event) => setLanguage(event.target.value)}><option>English</option><option>Hindi</option><option>Tamil</option></select><p>Answers grounded in BIS product manuals</p>{user && <div className="sidebar-user"><span className="sidebar-user-mark">{user.name.slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{USER_TYPES[user.user_type] || user.user_type}</small></span></div>}</div>
+      <div className="sidebar-bottom"><Link className="sidebar-gap-link" to="/gap">Gap Analyzer <span aria-hidden="true">&gt;</span></Link><label htmlFor="chat-language">Answer language</label><select id="chat-language" value={language} onChange={(event) => setLanguage(event.target.value)}><option>English</option><option>Hindi</option><option>Tamil</option></select><p>Answers grounded in BIS product manuals</p>{user && <div className="sidebar-user"><span className="sidebar-user-mark">{user.name.slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{USER_TYPES[user.user_type] || user.user_type}</small></span></div>}</div>
     </aside>
     <section className="chat-main">
       <header className="chat-topbar"><button className="menu-button" aria-label="Open menu" onClick={() => setSidebarOpen(true)}><span /><span /><span /></button><div><strong>BIS Nirdesh</strong><span>Standards assistant</span></div><Link className="chat-home-link" to="/">Home</Link></header>
@@ -178,8 +179,65 @@ function RegisterPage() {
   return <main className="auth-page"><Link className="brand-link" to="/"><Brand /></Link><section className="auth-card register-card"><div className="login-mark"><span className="brand-dot" /></div><p className="eyebrow">Get started</p><h1>Create your account</h1><p className="auth-intro">Tell us a little about yourself to tailor your guidance.</p><form className="auth-form" onSubmit={submit}><label>Name<input type="text" autoComplete="name" required maxLength="120" value={details.name} onChange={(event) => update("name", event.target.value)} /></label><label>Email address<input type="email" autoComplete="email" required value={details.email} onChange={(event) => update("email", event.target.value)} /></label><label>Password<input type="password" autoComplete="new-password" minLength="6" required value={details.password} onChange={(event) => update("password", event.target.value)} /><small>At least 6 characters</small></label><label>I am a<select value={details.user_type} onChange={(event) => update("user_type", event.target.value)}><option value="msme">MSME</option><option value="manufacturer">Manufacturer</option><option value="consumer">Consumer</option><option value="student">Student</option></select></label>{error && <p className="auth-error" role="alert">{error}</p>}<button className="button button-primary auth-submit" disabled={submitting}>{submitting ? "Creating account..." : "Register"}</button></form><p className="auth-switch">Already registered? <Link to="/login">Login</Link></p></section></main>;
 }
 
+const GAP_EXAMPLES = [
+  "Cordless electric kettle, 1500 W, 230 V, 1.5 litre capacity, plastic body, auto cut-off",
+  "Protective helmet for two wheeler riders, full face with visor, ABS shell, sizes M and L",
+];
+
+function GapPage() {
+  const { token } = useAuth();
+  const [description, setDescription] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function analyze(event) {
+    event.preventDefault();
+    if (!description.trim() || loading) return;
+    setLoading(true); setError(""); setResult(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/gap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ description, language }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.error || "Analysis request failed.");
+      if (data.error) throw new Error(data.error);
+      setResult(data);
+    } catch (requestError) {
+      setError(requestError.message === "Failed to fetch"
+        ? "We couldn't connect to BIS Nirdesh. Please check that the backend is running and try again."
+        : requestError.message);
+    } finally { setLoading(false); }
+  }
+
+  return <main className="gap-page">
+    <nav className="gap-nav"><Link className="brand-link" to="/"><Brand /></Link><Link className="button button-quiet" to="/chat">Chat</Link></nav>
+    <section className="gap-content">
+      <p className="eyebrow"><span className="eyebrow-dot" />BIS product manual review</p>
+      <h1>Specification Gap Analyzer</h1>
+      <p className="gap-intro">Describe your product to see which requirements are covered and what may still need attention.</p>
+      <form className="gap-form" onSubmit={analyze}>
+        <label className="visually-hidden" htmlFor="gap-description">Product description</label>
+        <textarea id="gap-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe your product, for example: Cordless electric kettle, 1500 W, 230 V, 1.5 L, plastic body" rows="6" />
+        <div className="gap-form-bottom"><label className="gap-language-label">Language<select value={language} onChange={(event) => setLanguage(event.target.value)}><option>English</option><option>Hindi</option><option>Tamil</option></select></label><button className="button button-primary" disabled={!description.trim() || loading}>{loading ? "Analyzing..." : "Analyze"}</button></div>
+      </form>
+      <div className="gap-examples"><span>Try an example</span>{GAP_EXAMPLES.map((example) => <button key={example} onClick={() => setDescription(example)}>{example}</button>)}</div>
+      {loading && <p className="gap-loading" role="status">Analyzing against BIS documents...</p>}
+      {error && <div className="gap-error" role="alert">{error}</div>}
+      {result && <section className="gap-results" aria-live="polite">
+        <div className="gap-summary"><div><span className="gap-product">{result.is_number}</span><strong>{result.product}</strong><p>{result.summary}</p></div><div className="gap-counts"><span className="gap-count provided">{result.counts.provided} Provided</span><span className="gap-count missing">{result.counts.missing} Missing</span><span className="gap-count unclear">{result.counts.unclear} Unclear</span></div></div>
+        <div className="gap-items">{result.items.map((item, index) => <article className="gap-item-card" key={`${item.requirement}-${index}`}><div className="gap-item-head"><h2>{item.requirement}</h2><span className={`gap-count ${item.status}`}>{item.status}</span></div><p>{item.reason}</p><div className="gap-item-meta"><strong>{result.is_number}</strong><span>Page {item.page}</span>{item.clause_ref && <span>{item.clause_ref}</span>}</div><blockquote>{item.quote}<span className="verification-badge is-verified">Verified</span></blockquote></article>)}</div>
+        <p className="gap-note">Based on BIS product manuals. Check the full Indian Standard and BIS before applying.</p>
+      </section>}
+    </section>
+  </main>;
+}
+
 function App() {
-  return <BrowserRouter><Routes><Route path="/" element={<LandingPage />} /><Route path="/chat" element={<ChatPage />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter>;
+  return <BrowserRouter><Routes><Route path="/" element={<LandingPage />} /><Route path="/chat" element={<ChatPage />} /><Route path="/gap" element={<GapPage />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></BrowserRouter>;
 }
 
 export default App;
