@@ -189,6 +189,7 @@ function GapPage() {
   const [description, setDescription] = useState("");
   const [language, setLanguage] = useState("English");
   const [result, setResult] = useState(null);
+  const [reportDate, setReportDate] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -206,6 +207,7 @@ function GapPage() {
       if (!response.ok) throw new Error(data.detail || data.error || "Analysis request failed.");
       if (data.error) throw new Error(data.error);
       setResult(data);
+      setReportDate(new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }));
     } catch (requestError) {
       setError(requestError.message === "Failed to fetch"
         ? "We couldn't connect to BIS Nirdesh. Please check that the backend is running and try again."
@@ -227,11 +229,23 @@ function GapPage() {
       <div className="gap-examples"><span>Try an example</span>{GAP_EXAMPLES.map((example) => <button key={example} onClick={() => setDescription(example)}>{example}</button>)}</div>
       {loading && <p className="gap-loading" role="status">Analyzing against BIS documents...</p>}
       {error && <div className="gap-error" role="alert">{error}</div>}
-      {result && <section className="gap-results" aria-live="polite">
+      {result && <>
+        <div className="gap-report-controls"><button className="button button-primary" type="button" onClick={() => window.print()}>Download report (PDF)</button><span>In the print window choose 'Save as PDF'.</span></div>
+        <section className="gap-results" aria-live="polite">
         <div className="gap-summary"><div><span className="gap-product">{result.is_number}</span><strong>{result.product}</strong><p>{result.summary}</p></div><div className="gap-counts"><span className="gap-count provided">{result.counts.provided} Provided</span><span className="gap-count missing">{result.counts.missing} Missing</span><span className="gap-count unclear">{result.counts.unclear} Unclear</span></div></div>
         <div className="gap-items">{result.items.map((item, index) => <article className="gap-item-card" key={`${item.requirement}-${index}`}><div className="gap-item-head"><h2>{item.requirement}</h2><span className={`gap-count ${item.status}`}>{item.status}</span></div><p>{item.reason}</p><div className="gap-item-meta"><strong>{result.is_number}</strong><span>Page {item.page}</span>{item.clause_ref && <span>{item.clause_ref}</span>}</div><blockquote>{item.quote}<span className="verification-badge is-verified">Verified</span></blockquote></article>)}</div>
         <p className="gap-note">Based on BIS product manuals. Check the full Indian Standard and BIS before applying.</p>
-      </section>}
+        </section>
+        <article className="gap-print-report" aria-hidden="true">
+          <h1>BIS Nirdesh - Specification Gap Analysis</h1>
+          <p className="print-date">{reportDate}</p>
+          <h2>{result.product} ({result.is_number})</h2>
+          <section><h3>Product description</h3><p className="print-description">{description}</p></section>
+          <section><h3>Summary</h3><p>{result.summary}</p><div className="print-counts"><span className="provided">Provided: {result.counts.provided}</span><span className="missing">Missing: {result.counts.missing}</span><span className="unclear">Unclear: {result.counts.unclear}</span></div></section>
+          <section className="print-items-section"><h3>Requirements</h3>{result.items.map((item, index) => <article className="print-item" key={`${item.requirement}-print-${index}`}><h4>{item.requirement}</h4><p><strong>Status:</strong> <span className={`print-status ${item.status}`}>{item.status}</span></p><p><strong>Reason:</strong> {item.reason}</p><p><strong>IS number:</strong> {result.is_number}</p><p><strong>Page:</strong> {item.page}</p>{item.clause_ref && <p><strong>Clause:</strong> {item.clause_ref}</p>}<blockquote>{item.quote}</blockquote><p><strong>Quote verification:</strong> {item.verified ? "Verified" : "Not verified"}</p></article>)}</section>
+          <footer>{"Based on BIS product manuals. Check the full Indian Standard and BIS before applying."}</footer>
+        </article>
+      </>}
     </section>
   </main>;
 }
